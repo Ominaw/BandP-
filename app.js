@@ -13,7 +13,7 @@ function loadState() {
   const raw = localStorage.getItem(STORAGE_KEY);
   if (!raw) return structuredClone(defaultState);
   try {
-    return { ...structuredClone(defaultState), ...JSON.parse(raw) };
+    return normalizeState({ ...structuredClone(defaultState), ...JSON.parse(raw) });
   } catch {
     return structuredClone(defaultState);
   }
@@ -21,6 +21,7 @@ function loadState() {
 
 function saveState() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  refreshSyncCodeIfPresent();
 }
 
 function getSeasonId(year, name) {
@@ -28,12 +29,12 @@ function getSeasonId(year, name) {
 }
 
 function ensureActiveSeason() {
-  if (!state.activeSeasonId) {
+  if (!state.activeSeasonId || !state.seasons[state.activeSeasonId]) {
     const now = new Date();
     const year = now.getFullYear();
     const name = "Summer";
     const id = getSeasonId(year, name);
-    state.seasons[id] = state.seasons[id] || { year, name, pickleball: [], bowling: [] };
+    state.seasons[id] = state.seasons[id] || { year, name, pickleball: [], bowling: [], updatedAt: new Date().toISOString() };
     state.activeSeasonId = id;
     saveState();
   }
@@ -58,6 +59,10 @@ function bindTabs() {
   });
 }
 
+function touchSeason(season) {
+  season.updatedAt = new Date().toISOString();
+}
+
 function bindForms() {
   document.getElementById('season-form').addEventListener('submit', e => {
     e.preventDefault();
@@ -65,7 +70,7 @@ function bindForms() {
     const name = document.getElementById('season-name').value.trim();
     if (!name) return;
     const id = getSeasonId(year, name);
-    state.seasons[id] = state.seasons[id] || { year, name, pickleball: [], bowling: [] };
+    state.seasons[id] = state.seasons[id] || { year, name, pickleball: [], bowling: [], updatedAt: new Date().toISOString() };
     state.activeSeasonId = id;
     saveState();
     renderAll();
@@ -91,6 +96,7 @@ function bindForms() {
     if (!winner) return;
     const season = ensureActiveSeason();
     season.pickleball.push({ winner, opponent: opponent || null, notes, at: new Date().toISOString() });
+    touchSeason(season);
     saveState();
     renderAll();
   });
@@ -106,6 +112,7 @@ function bindForms() {
     if (!player || Number.isNaN(score)) return;
     const season = ensureActiveSeason();
     season.bowling.push({ player, score, at: new Date().toISOString() });
+    touchSeason(season);
     saveState();
     renderAll();
   });
@@ -165,11 +172,11 @@ function renderStats(season) {
     bowlingTotals[g.player].games += 1;
   });
 
-  const pLeader = Object.entries(pickleballWins).sort((a,b) => b[1]-a[1]);
-  const bLeader = Object.entries(bowlingTotals).map(([p, s]) => [p, (s.total/s.games).toFixed(1)]).sort((a,b) => b[1]-a[1]);
+  const pLeader = Object.entries(pickleballWins).sort((a, b) => b[1] - a[1]);
+  const bLeader = Object.entries(bowlingTotals).map(([p, s]) => [p, (s.total / s.games).toFixed(1)]).sort((a, b) => b[1] - a[1]);
 
-  document.getElementById('pickleball-leaderboard').innerHTML = pLeader.map(([p,w]) => `<li>${p}: ${w} wins</li>`).join('') || '<li>No games yet</li>';
-  document.getElementById('bowling-leaderboard').innerHTML = bLeader.map(([p,avg]) => `<li>${p}: ${avg} avg</li>`).join('') || '<li>No scores yet</li>';
+  document.getElementById('pickleball-leaderboard').innerHTML = pLeader.map(([p, w]) => `<li>${p}: ${w} wins</li>`).join('') || '<li>No games yet</li>';
+  document.getElementById('bowling-leaderboard').innerHTML = bLeader.map(([p, avg]) => `<li>${p}: ${avg} avg</li>`).join('') || '<li>No scores yet</li>';
 
   const stats = [
     `Players: ${state.players.length}`,
@@ -182,7 +189,7 @@ function renderStats(season) {
 
 function renderArchive() {
   const archive = document.getElementById('season-archive');
-  const seasons = Object.values(state.seasons).sort((a,b) => b.year - a.year || a.name.localeCompare(b.name));
+  const seasons = Object.values(state.seasons).sort((a, b) => b.year - a.year || a.name.localeCompare(b.name));
   archive.innerHTML = seasons.map(s => {
     const wins = s.pickleball.length;
     const bowls = s.bowling.length;
@@ -196,7 +203,7 @@ function renderArchive() {
 function topWinner(season) {
   const wins = {};
   season.pickleball.forEach(g => wins[g.winner] = (wins[g.winner] || 0) + 1);
-  return Object.entries(wins).sort((a,b) => b[1]-a[1])[0]?.[0] || null;
+  return Object.entries(wins).sort((a, b) => b[1] - a[1])[0]?.[0] || null;
 }
 
 function topBowler(season) {
@@ -206,23 +213,38 @@ function topBowler(season) {
     t[g.player].total += g.score;
     t[g.player].games += 1;
   });
-  return Object.entries(t).map(([p,s]) => [p,s.total/s.games]).sort((a,b) => b[1]-a[1])[0]?.[0] || null;
+  return Object.entries(t).map(([p, s]) => [p, s.total / s.games]).sort((a, b) => b[1] - a[1])[0]?.[0] || null;
 }
-
 
 function showSyncStatus(message) {
   document.getElementById('sync-status').textContent = message;
 }
 
+function encodeSyncPayload(payload) {
+  const json = JSON.stringify(payload);
+  return btoa(unescape(encodeURIComponent(json))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+}
+
+function decodeSyncPayload(code) {
+  const padded = code.replace(/-/g, '+').replace(/_/g, '/').padEnd(Math.ceil(code.length / 4) * 4, '=');
+  return JSON.parse(decodeURIComponent(escape(atob(padded))));
+}
+
 function generateSyncCode() {
   const payload = {
     exportedAt: new Date().toISOString(),
-    app: 'summerSportsTrackerV1',
+    app: STORAGE_KEY,
     state,
   };
-  const code = btoa(unescape(encodeURIComponent(JSON.stringify(payload))));
-  document.getElementById('sync-code').value = code;
-  showSyncStatus('Sync code generated. Copy and paste it on the other phone.');
+  document.getElementById('sync-code').value = encodeSyncPayload(payload);
+  showSyncStatus('Sync code generated. It includes your latest saved data.');
+}
+
+function refreshSyncCodeIfPresent() {
+  const area = document.getElementById('sync-code');
+  if (area && area.value.trim()) {
+    generateSyncCode();
+  }
 }
 
 async function copySyncCode() {
@@ -241,6 +263,60 @@ async function copySyncCode() {
   }
 }
 
+function uniqBy(items, keyFn) {
+  const seen = new Set();
+  return items.filter(item => {
+    const key = keyFn(item);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function normalizeState(input) {
+  const safe = { ...structuredClone(defaultState), ...input };
+  safe.players = Array.isArray(safe.players) ? [...new Set(safe.players.filter(Boolean))].sort((a, b) => a.localeCompare(b)) : [];
+  safe.seasons = safe.seasons && typeof safe.seasons === 'object' ? safe.seasons : {};
+
+  Object.entries(safe.seasons).forEach(([id, season]) => {
+    if (!season || typeof season !== 'object') {
+      delete safe.seasons[id];
+      return;
+    }
+    season.year = Number(season.year) || new Date().getFullYear();
+    season.name = season.name || 'Summer';
+    season.pickleball = Array.isArray(season.pickleball) ? season.pickleball : [];
+    season.bowling = Array.isArray(season.bowling) ? season.bowling : [];
+    season.updatedAt = season.updatedAt || new Date().toISOString();
+  });
+
+  return safe;
+}
+
+function mergeImportedState(incomingRaw) {
+  const incoming = normalizeState(incomingRaw);
+  const merged = normalizeState(state);
+  merged.players = [...new Set([...merged.players, ...incoming.players])].sort((a, b) => a.localeCompare(b));
+
+  Object.entries(incoming.seasons).forEach(([id, season]) => {
+    if (!merged.seasons[id]) {
+      merged.seasons[id] = season;
+      return;
+    }
+
+    const current = merged.seasons[id];
+    current.pickleball = uniqBy([...current.pickleball, ...season.pickleball], g => `${g.winner}|${g.opponent || ''}|${g.notes || ''}|${g.at || ''}`);
+    current.bowling = uniqBy([...current.bowling, ...season.bowling], g => `${g.player}|${g.score}|${g.at || ''}`);
+    current.updatedAt = new Date(Math.max(new Date(current.updatedAt).getTime(), new Date(season.updatedAt).getTime())).toISOString();
+  });
+
+  if (incoming.activeSeasonId && incoming.seasons[incoming.activeSeasonId]) {
+    merged.activeSeasonId = incoming.activeSeasonId;
+  }
+
+  return merged;
+}
+
 function importSyncCode() {
   const rawCode = document.getElementById('sync-code').value.trim();
   if (!rawCode) {
@@ -249,17 +325,16 @@ function importSyncCode() {
   }
 
   try {
-    const decoded = decodeURIComponent(escape(atob(rawCode)));
-    const parsed = JSON.parse(decoded);
-    if (!parsed || parsed.app !== 'summerSportsTrackerV1' || typeof parsed.state !== 'object') {
+    const parsed = decodeSyncPayload(rawCode);
+    if (!parsed || parsed.app !== STORAGE_KEY || typeof parsed.state !== 'object') {
       throw new Error('Invalid sync code');
     }
 
-    state = { ...structuredClone(defaultState), ...parsed.state };
+    state = mergeImportedState(parsed.state);
     ensureActiveSeason();
     saveState();
     renderAll();
-    showSyncStatus(`Imported successfully (exported ${new Date(parsed.exportedAt).toLocaleString()}).`);
+    showSyncStatus(`Imported and merged successfully (exported ${new Date(parsed.exportedAt).toLocaleString()}).`);
   } catch {
     showSyncStatus('Invalid sync code. Please verify and try again.');
   }
