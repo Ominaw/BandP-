@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Summer Sports Tracker</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <header class="hero">
+      <h1>🏆 Summer Sports Tracker</h1>
+      <p>Track Bowling scores and Pickleball wins across years and seasons.</p>
+    </header>
+
+    <nav class="tabs" aria-label="Main pages">
+      <button class="tab active" data-tab="dashboard">Dashboard</button>
+      <button class="tab" data-tab="players">Players</button>
+      <button class="tab" data-tab="pickleball">Pickleball</button>
+      <button class="tab" data-tab="bowling">Bowling</button>
+      <button class="tab" data-tab="history">Season History</button>
+    </nav>
+
+    <main>
+      <section id="dashboard" class="panel active">
+        <div class="card-grid">
+          <article class="card">
+            <h2>Active Season</h2>
+            <form id="season-form" class="stack">
+              <label>
+                Year
+                <input type="number" id="season-year" min="2000" max="2100" required />
+              </label>
+              <label>
+                Season Name
+                <input type="text" id="season-name" placeholder="Summer League" required />
+              </label>
+              <button type="submit">Set Active Season</button>
+            </form>
+            <p id="active-season-label" class="muted"></p>
+          </article>
+
+          <article class="card">
+            <h2>Quick Stats</h2>
+            <ul id="quick-stats" class="stats-list"></ul>
+          </article>
+
+          <article class="card">
+            <h2>Leaderboard</h2>
+            <div class="leaderboards">
+              <div>
+                <h3>Pickleball Wins</h3>
+                <ol id="pickleball-leaderboard"></ol>
+              </div>
+              <div>
+                <h3>Bowling Avg Score</h3>
+                <ol id="bowling-leaderboard"></ol>
+              </div>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section id="players" class="panel">
+        <article class="card">
+          <h2>Add Player</h2>
+          <form id="player-form" class="stack row-mobile">
+            <input type="text" id="player-name" placeholder="Player name" required />
+            <button type="submit">Add Player</button>
+          </form>
+          <h3>Player Roster</h3>
+          <ul id="player-list" class="pill-list"></ul>
+        </article>
+      </section>
+
+      <section id="pickleball" class="panel">
+        <article class="card">
+          <h2>Record Pickleball Game</h2>
+          <form id="pickleball-form" class="stack">
+            <label>
+              Winner
+              <select id="pickleball-winner" required></select>
+            </label>
+            <label>
+              Opponent (optional)
+              <select id="pickleball-opponent"></select>
+            </label>
+            <label>
+              Notes
+              <input type="text" id="pickleball-notes" placeholder="11-8, windy court..." />
+            </label>
+            <button type="submit">Save Pickleball Result</button>
+          </form>
+          <h3>Games This Season</h3>
+          <ul id="pickleball-games" class="records"></ul>
+        </article>
+      </section>
+
+      <section id="bowling" class="panel">
+        <article class="card">
+          <h2>Record Bowling Score</h2>
+          <form id="bowling-form" class="stack">
+            <label>
+              Player
+              <select id="bowling-player" required></select>
+            </label>
+            <label>
+              Score
+              <input type="number" id="bowling-score" min="0" max="300" required />
+            </label>
+            <button type="submit">Save Bowling Score</button>
+          </form>
+          <h3>Scores This Season</h3>
+          <ul id="bowling-games" class="records"></ul>
+        </article>
+      </section>
+
+      <section id="history" class="panel">
+        <article class="card">
+          <h2>Season Archive</h2>
+          <p class="muted">All years & seasons are saved in your browser.</p>
+          <div id="season-archive"></div>
+        </article>
+
+        <article class="card">
+          <h2>Phone-to-Phone Sync</h2>
+          <p class="muted">Copy the Sync Code from one phone and paste it into another phone to transfer all seasons, players, pickleball wins, and bowling scores.</p>
+          <div class="stack">
+            <button id="generate-sync-code" type="button">Generate Sync Code</button>
+            <label>
+              Sync Code
+              <textarea id="sync-code" rows="7" placeholder="Tap Generate, then copy and share this code..."></textarea>
+            </label>
+            <div class="row-mobile">
+              <button id="copy-sync-code" type="button">Copy Code</button>
+              <button id="import-sync-code" type="button">Import Code</button>
+            </div>
+            <p id="sync-status" class="muted"></p>
+          </div>
+        </article>
+      </section>
+    </main>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
